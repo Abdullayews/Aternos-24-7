@@ -22,6 +22,8 @@ let bot = null;
 let reconnectTimer = null;
 let antiAfkTimer = null;
 let currentDelay = CONFIG.reconnectDelay;
+let ignoredParseErrors = 0;
+let lastParseErrorLog = 0;
 
 const ts = () => new Date().toISOString();
 
@@ -53,6 +55,30 @@ if (SELF_URL) {
   }, 60 * 1000);
 }
 
+/* Heavily modded servers send huge packets (recipes, command tree)
+   right after login that sometimes fail to parse. The AFK bot does
+   not need those packets, so we ignore parse errors and keep the
+   connection alive instead of crashing. */
+function isParseError(err) {
+  if (!err) return false;
+  if (err.name === 'PartialReadError') return true;
+  return /Read error|partial packet|Chunk size/i.test(err.message || '');
+}
+
+function logParseError() {
+  ignoredParseErrors++;
+  if (Date.now() - lastParseErrorLog > 10000) {
+    lastParseErrorLog = Date.now();
+    console.log(`[${ts()}] Ignored ${ignoredParseErrors} modded packet parse error(s) — not needed for AFK`);
+  }
+}
+
+function safeReconnect() {
+  stopAntiAfk();
+  try { if (bot) bot.end(); } catch (e) {}
+  scheduleReconnect();
+}
+
 function connectBot() {
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
@@ -77,9 +103,7 @@ function connectBot() {
 
   bot = mineflayer.createBot(options);
 
-  /* ===== Forge handshake via minecraft-protocol-forge =====
-     Applied immediately after createBot, BEFORE any login packets flow.
-     version: false lets the plugin auto-detect both version and mods. */
+  /* Forge handshake via minecraft-protocol-forge */
   if (CONFIG.forge && bot._client) {
     if (CONFIG.forgeMods) {
       const mods = CONFIG.forgeMods.split(',').map(s => {
@@ -112,8 +136,9 @@ function connectBot() {
   });
 
   bot.on('error', (err) => {
-    console.log(`[${ts()}] Error: ${err.message}`);
-    scheduleReconnect();
+    if (isParseError(err)) { logParseError(); return; }
+    console.log(`[${ts()}] Error: ${err && err.message}`);
+    safeReconnect();
   });
 
   bot.on('end', () => {
@@ -127,6 +152,7 @@ function scheduleReconnect() {
   if (reconnectTimer) return;
   const delay = currentDelay;
   currentDelay = Math.min(currentDelay * 2, CONFIG.maxReconnectDelay);
+  console.log(`[${ts()}] Reconnecting in ${delay / 1000}s`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connectBot();
@@ -153,6 +179,19 @@ function startAntiAfk() {
 function stopAntiAfk() {
   if (antiAfkTimer) { clearInterval(antiAfkTimer); antiAfkTimer = null; }
 }
+
+/* Crash resilience: parse errors are ignored, everything else
+   triggers a clean reconnect instead of killing the process */
+process.on('uncaughtException', (err) => {
+  if (isParseError(err)) { logParseError(); return; }
+  console.log(`[${ts()}] Uncaught exception: ${err && (err.stack || err.message)}`);
+  safeReconnect();
+});
+
+process.on('unhandledRejection', (err) => {
+  console.log(`[${ts()}] Unhandled rejection: ${err && (err.stack || err.message)}`);
+  safeReconnect();
+});
 
 let mineflayerVersion = 'unknown';
 try { mineflayerVersion = require('mineflayer/package.json').version; } catch (e) {}
