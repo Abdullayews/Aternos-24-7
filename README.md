@@ -29,11 +29,13 @@ Aternos is amazing — a fully free Minecraft server. The catch: the moment the 
 ## ✨ Features
 
 - 🔌 **Auto-reconnect** with exponential backoff (10s → 2min) — survives restarts, crashes and queue rage
+- 💀 **Auto-respawn** — if the bot somehow dies, it clicks respawn and carries on
 - 🕺 **Anti-AFK** micro-movements so the server doesn't idle-kick the bot
+- 🔨 **Forge support** — one env variable away for modded servers
 - 🩺 **Status endpoint** — check on your bot from anywhere via JSON
 - 🔁 **Self-ping** keeps the free Render instance awake — no UptimeRobot needed
 - ⚙️ **Zero code edits** — everything is configured with environment variables
-- 🪶 **~120 lines** of readable code, no bloat, no build step
+- 🪶 **~130 lines** of readable code, no bloat, no build step
 
 ## 🚀 Quick start
 
@@ -69,13 +71,23 @@ Aternos is amazing — a fully free Minecraft server. The catch: the moment the 
 | `AUTH` | `offline` | `offline` for cracked servers, `microsoft` for a real account |
 | `BOT_EMAIL` | — | Microsoft account email (only if `AUTH=microsoft`) |
 | `BOT_PASSWORD` | — | Microsoft account password (only if `AUTH=microsoft`) |
-| `MC_VERSION` | auto | Pin e.g. `1.20.4` if autodetect fails |
+| `MC_VERSION` | auto | Pin e.g. `1.21.4` if autodetect fails |
+| `FORGE` | `false` | Set `true` if your server runs Forge |
 | `RECONNECT_DELAY` | `10000` | First reconnect delay, ms |
 | `MAX_RECONNECT_DELAY` | `120000` | Reconnect backoff cap, ms |
 | `ANTI_AFK` | `true` | Micro-movements on/off |
 | `ANTI_AFK_INTERVAL` | `30000` | Movement frequency, ms |
 
 Change any of these from the Render dashboard → **Environment** → the app redeploys automatically. No code edits, ever.
+
+## 🔨 Forge servers
+
+Running a modded server? Just set `FORGE=true` and the bot speaks the FML2 handshake before joining.
+
+Two things worth knowing:
+
+- **Forge 1.13+ only** — legacy FML1 (think 1.12.2 modpacks) isn't supported by the protocol library
+- **Heavily modded packs** that add custom entities/blocks right at login may still reject vanilla bots — simple setups work fine
 
 ## 🩺 Status endpoint
 
@@ -97,6 +109,7 @@ Hit your Render URL (`https://your-app.onrender.com`) and get:
 | Bot can't connect | Server is hibernating — start it once from the Aternos panel |
 | `bot was kicked` | Check `BOT_NAME`, Cracked setting, whitelist |
 | Version mismatch error | Set `MC_VERSION` manually |
+| Forge server rejects login | Make sure `FORGE=true` is set |
 | Microsoft login fails | Double-check `BOT_EMAIL` / `BOT_PASSWORD` |
 | Render instance sleeps anyway | Check Logs for `Self-ping OK` — should appear every 60s |
 
