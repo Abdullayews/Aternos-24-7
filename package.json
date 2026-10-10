@@ -6,10 +6,10 @@
     "start": "node index.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22 <23"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "mineflayer": "^4.0.0"
+    "mineflayer": "^4.20.0"
   }
 }
