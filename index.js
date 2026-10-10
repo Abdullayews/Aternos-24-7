@@ -23,6 +23,7 @@ let currentDelay = CONFIG.reconnectDelay;
 
 const ts = () => new Date().toISOString();
 
+/* Web server: status endpoint + keeps the Render instance awake */
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -30,13 +31,14 @@ app.get('/', (req, res) => {
   res.json({
     status: 'running',
     bot: (bot && bot.entity) ? 'connected' : 'disconnected',
-    target: CONFIG.host ? `${CONFIG.host}:${CONFIG.port}` : 'SERVER_HOST yoxdur',
+    target: CONFIG.host ? `${CONFIG.host}:${CONFIG.port}` : 'SERVER_HOST not set',
     uptimeSeconds: Math.floor(process.uptime())
   });
 });
 
-app.listen(PORT, () => console.log(`[${ts()}] Web server: ${PORT}`));
+app.listen(PORT, () => console.log(`[${ts()}] Web server listening on port ${PORT}`));
 
+/* Self-ping: prevents the free instance from sleeping (Render only) */
 const SELF_URL = process.env.RENDER_EXTERNAL_URL;
 if (SELF_URL) {
   setInterval(async () => {
@@ -44,7 +46,7 @@ if (SELF_URL) {
       const res = await fetch(SELF_URL);
       console.log(`[${ts()}] Self-ping OK (${res.status})`);
     } catch (e) {
-      console.log(`[${ts()}] Self-ping xəta: ${e.message}`);
+      console.log(`[${ts()}] Self-ping failed: ${e.message}`);
     }
   }, 60 * 1000);
 }
@@ -53,7 +55,7 @@ function connectBot() {
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
   if (!CONFIG.host) {
-    console.log(`[${ts()}] SERVER_HOST yoxdur`);
+    console.log(`[${ts()}] SERVER_HOST is not set`);
     return scheduleReconnect();
   }
 
@@ -69,6 +71,7 @@ function connectBot() {
     options.password = CONFIG.password;
   }
   if (CONFIG.forge) {
+    // FML2 handshake — required by Forge 1.13+ servers
     options.forge = { version: 2 };
   }
 
@@ -76,26 +79,26 @@ function connectBot() {
 
   bot.once('spawn', () => {
     currentDelay = CONFIG.reconnectDelay;
-    console.log(`[${ts()}] Bot oyundadır`);
+    console.log(`[${ts()}] Bot is in game`);
     startAntiAfk();
   });
 
   bot.on('death', () => {
-    console.log(`[${ts()}] Bot öldü, yenidən doğulur`);
+    console.log(`[${ts()}] Bot died, respawning`);
     bot.respawn();
   });
 
   bot.on('kicked', (reason) => {
-    console.log(`[${ts()}] Qovuldu: ${JSON.stringify(reason)}`);
+    console.log(`[${ts()}] Kicked: ${JSON.stringify(reason)}`);
   });
 
   bot.on('error', (err) => {
-    console.log(`[${ts()}] Xəta: ${err.message}`);
+    console.log(`[${ts()}] Error: ${err.message}`);
     scheduleReconnect();
   });
 
   bot.on('end', () => {
-    console.log(`[${ts()}] Bağlantı kəsildi`);
+    console.log(`[${ts()}] Connection ended`);
     stopAntiAfk();
     scheduleReconnect();
   });
@@ -132,5 +135,10 @@ function stopAntiAfk() {
   if (antiAfkTimer) { clearInterval(antiAfkTimer); antiAfkTimer = null; }
 }
 
+let mineflayerVersion = 'unknown';
+try { mineflayerVersion = require('mineflayer/package.json').version; } catch (e) {}
+
+console.log(`[${ts()}] Config: forge=${CONFIG.forge} | version=${CONFIG.version || 'auto'} | host=${CONFIG.host}`);
+console.log(`[${ts()}] Runtime: node=${process.version} | mineflayer=${mineflayerVersion}`);
+
 connectBot();
-console.log(`[${ts()}] Konfiq: forge=${CONFIG.forge} | version=${CONFIG.version || 'auto'} | host=${CONFIG.host}`);
