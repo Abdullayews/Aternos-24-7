@@ -133,3 +133,4 @@ function stopAntiAfk() {
 }
 
 connectBot();
+console.log(`[${ts()}] Konfiq: forge=${CONFIG.forge} | version=${CONFIG.version || 'auto'} | host=${CONFIG.host}`);
