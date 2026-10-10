@@ -9,9 +9,9 @@ const CONFIG = {
   auth: process.env.AUTH || 'offline',
   email: process.env.BOT_EMAIL || '',
   password: process.env.BOT_PASSWORD || '',
-  version: process.env.MC_VERSION || false, // false = auto-detect (plugin üçün vacibdir)
+  version: process.env.MC_VERSION || false,
   forge: (process.env.FORGE || 'false') === 'true',
-  forgeMods: process.env.FORGE_MODS || '',   // optional: "modid:version,modid:version"
+  forgeMods: process.env.FORGE_MODS || '',
   reconnectDelay: parseInt(process.env.RECONNECT_DELAY || '10000', 10),
   maxReconnectDelay: parseInt(process.env.MAX_RECONNECT_DELAY || '120000', 10),
   antiAfk: (process.env.ANTI_AFK || 'true') === 'true',
@@ -78,11 +78,10 @@ function connectBot() {
   bot = mineflayer.createBot(options);
 
   /* ===== Forge handshake via minecraft-protocol-forge =====
-     autoVersionForge: pings the server, reads the advertised mod list,
-     and performs FML handshake with exactly those mods.          */
+     Applied immediately after createBot, BEFORE any login packets flow.
+     version: false lets the plugin auto-detect both version and mods. */
   if (CONFIG.forge && bot._client) {
     if (CONFIG.forgeMods) {
-      // Manual mod list: "modid:version,modid:version"
       const mods = CONFIG.forgeMods.split(',').map(s => {
         const [modid, version] = s.trim().split(':');
         return { modid, version };
@@ -90,18 +89,11 @@ function connectBot() {
       forgeHandshake(bot._client, { forgeMods: mods });
       console.log(`[${ts()}] Forge handshake: manual mod list (${mods.length} mods)`);
     } else {
-      // Auto-detect mods from server ping
       autoVersionForge(bot._client);
       console.log(`[${ts()}] Forge handshake: auto-detecting mods from server`);
     }
-  } else if (CONFIG.forge && !bot._client) {
-    console.log(`[${ts()}] Warning: bot._client not available yet, retrying...`);
-    setTimeout(() => {
-      if (bot && bot._client) {
-        autoVersionForge(bot._client);
-        console.log(`[${ts()}] Forge handshake: applied (retry)`);
-      }
-    }, 100);
+  } else if (CONFIG.forge) {
+    console.log(`[${ts()}] Warning: bot._client not available, Forge disabled for this attempt`);
   }
 
   bot.once('spawn', () => {
