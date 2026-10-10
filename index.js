@@ -9,6 +9,7 @@ const CONFIG = {
   email: process.env.BOT_EMAIL || '',
   password: process.env.BOT_PASSWORD || '',
   version: process.env.MC_VERSION || undefined,
+  forge: (process.env.FORGE || 'false') === 'true',
   reconnectDelay: parseInt(process.env.RECONNECT_DELAY || '10000', 10),
   maxReconnectDelay: parseInt(process.env.MAX_RECONNECT_DELAY || '120000', 10),
   antiAfk: (process.env.ANTI_AFK || 'true') === 'true',
@@ -67,6 +68,9 @@ function connectBot() {
     options.username = CONFIG.email;
     options.password = CONFIG.password;
   }
+  if (CONFIG.forge) {
+    options.forge = { version: 2 };
+  }
 
   bot = mineflayer.createBot(options);
 
@@ -74,6 +78,11 @@ function connectBot() {
     currentDelay = CONFIG.reconnectDelay;
     console.log(`[${ts()}] Bot oyundadır`);
     startAntiAfk();
+  });
+
+  bot.on('death', () => {
+    console.log(`[${ts()}] Bot öldü, yenidən doğulur`);
+    bot.respawn();
   });
 
   bot.on('kicked', (reason) => {
