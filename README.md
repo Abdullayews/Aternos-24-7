@@ -1,6 +1,3 @@
-Repo kökündə `README.md` kimi qoy:
-
-````markdown
 <div align="center">
 
 # 🤖 aternos-afk-bot
@@ -119,15 +116,3 @@ SERVER_HOST=something.aternos.me BOT_NAME=MyBot npm start
 Automating an AFK player goes against Aternos's terms of service, and they actively hunt bots. Worst case: your server or account gets banned. This project is for **educational purposes** — use at your own risk.
 
 If you actually need reliable 24/7 hosting, consider [exaroton](https://exaroton.com) (Aternos's paid sibling, billed per minute) or a cheap VPS.
-
-## 📄 License
-
-[MIT](LICENSE) — do whatever you want, just keep the copyright line.
-````
-
-Bir neçə qeyd:
-
-- Badge-lər shields.io-dandır — işləməsi üçün heç nə etmək lazım deyil, sadəcə şəkillərdir
-- `<div align="center">` bloku GitHub-da düzgün render olunur, başlıq və badge-ləri ortalar
-- Disclaimer hissəsini saxladım — açıq repo üçün vacibdir, həm də axtarışda "educational purposes" yazısı gülüşlü görünür
-- README-nin sonu "deploy düyməsi" dəstəyi ilə genişlənə bilər (`render.yaml` + Deploy to Render button) — istəsən onu da yazaram, eləcə də tam Azərbaycanca versiyasını
