@@ -117,3 +117,4 @@ SERVER_HOST=something.aternos.me BOT_NAME=MyBot npm start
 Automating an AFK player goes against Aternos's terms of service, and they actively hunt bots. Worst case: your server or account gets banned. This project is for **educational purposes** — use at your own risk.
 
 If you actually need reliable 24/7 hosting, consider [exaroton](https://exaroton.com) (Aternos's paid sibling, billed per minute) or a cheap VPS.
+````
