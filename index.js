@@ -12,8 +12,8 @@ const CONFIG = {
   version: process.env.MC_VERSION || false,
   forge: (process.env.FORGE || 'false') === 'true',
   forgeMods: process.env.FORGE_MODS || '',
-  reconnectDelay: parseInt(process.env.RECONNECT_DELAY || '10000', 10),
-  maxReconnectDelay: parseInt(process.env.MAX_RECONNECT_DELAY || '120000', 10),
+  reconnectDelay: parseInt(process.env.RECONNECT_DELAY || '5000', 10),
+  maxReconnectDelay: parseInt(process.env.MAX_RECONNECT_DELAY || '60000', 10),
   antiAfk: (process.env.ANTI_AFK || 'true') === 'true',
   antiAfkInterval: parseInt(process.env.ANTI_AFK_INTERVAL || '30000', 10)
 };
@@ -21,9 +21,11 @@ const CONFIG = {
 let bot = null;
 let reconnectTimer = null;
 let antiAfkTimer = null;
+let watchdogTimer = null;
 let currentDelay = CONFIG.reconnectDelay;
-let ignoredParseErrors = 0;
-let lastParseErrorLog = 0;
+let lastPacketTime = Date.now();
+let reconnectCount = 0;
+let lastReconnectLog = 0;
 
 const ts = () => new Date().toISOString();
 
@@ -36,7 +38,8 @@ app.get('/', (req, res) => {
     status: 'running',
     bot: (bot && bot.entity) ? 'connected' : 'disconnected',
     target: CONFIG.host ? `${CONFIG.host}:${CONFIG.port}` : 'SERVER_HOST not set',
-    uptimeSeconds: Math.floor(process.uptime())
+    uptimeSeconds: Math.floor(process.uptime()),
+    totalReconnects: reconnectCount
   });
 });
 
@@ -55,32 +58,46 @@ if (SELF_URL) {
   }, 60 * 1000);
 }
 
-/* Heavily modded servers send huge packets (recipes, command tree)
-   right after login that sometimes fail to parse. The AFK bot does
-   not need those packets, so we ignore parse errors and keep the
-   connection alive instead of crashing. */
-function isParseError(err) {
-  if (!err) return false;
-  if (err.name === 'PartialReadError') return true;
-  return /Read error|partial packet|Chunk size/i.test(err.message || '');
-}
-
-function logParseError() {
-  ignoredParseErrors++;
-  if (Date.now() - lastParseErrorLog > 10000) {
-    lastParseErrorLog = Date.now();
-    console.log(`[${ts()}] Ignored ${ignoredParseErrors} modded packet parse error(s) — not needed for AFK`);
-  }
-}
-
+/* Heavily modded Forge servers send 1MB+ unlock_recipes and declare_commands
+   packets that crash the vanilla protocol parser. The connection dies.
+   Solution: detect the dead connection (watchdog) and reconnect fast.
+   Each reconnect counts as a player join, keeping the Aternos server awake. */
 function safeReconnect() {
   stopAntiAfk();
+  stopWatchdog();
   try { if (bot) bot.end(); } catch (e) {}
   scheduleReconnect();
 }
 
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  const delay = currentDelay;
+  currentDelay = Math.min(currentDelay * 2, CONFIG.maxReconnectDelay);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectBot();
+  }, delay);
+}
+
+function startWatchdog() {
+  stopWatchdog();
+  watchdogTimer = setInterval(() => {
+    const silence = Date.now() - lastPacketTime;
+    if (silence > 30000) {
+      console.log(`[${ts()}] Watchdog: no packets for ${Math.floor(silence / 1000)}s, forcing reconnect`);
+      reconnectCount++;
+      safeReconnect();
+    }
+  }, 10000);
+}
+
+function stopWatchdog() {
+  if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+}
+
 function connectBot() {
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  lastPacketTime = Date.now();
 
   if (!CONFIG.host) {
     console.log(`[${ts()}] SERVER_HOST is not set`);
@@ -92,71 +109,97 @@ function connectBot() {
     port: CONFIG.port,
     username: CONFIG.username,
     version: CONFIG.version || false,
-    auth: CONFIG.auth
+    auth: CONFIG.auth,
+    hideErrors: false
   };
   if (CONFIG.auth === 'microsoft') {
     options.username = CONFIG.email;
     options.password = CONFIG.password;
   }
 
-  console.log(`[${ts()}] Connecting: ${CONFIG.host}:${CONFIG.port} (${CONFIG.username}, forge=${CONFIG.forge})`);
-
-  bot = mineflayer.createBot(options);
+  try {
+    bot = mineflayer.createBot(options);
+  } catch (e) {
+    console.log(`[${ts()}] createBot threw: ${e.message}`);
+    return scheduleReconnect();
+  }
 
   /* Forge handshake via minecraft-protocol-forge */
   if (CONFIG.forge && bot._client) {
-    if (CONFIG.forgeMods) {
-      const mods = CONFIG.forgeMods.split(',').map(s => {
-        const [modid, version] = s.trim().split(':');
-        return { modid, version };
-      });
-      forgeHandshake(bot._client, { forgeMods: mods });
-      console.log(`[${ts()}] Forge handshake: manual mod list (${mods.length} mods)`);
-    } else {
-      autoVersionForge(bot._client);
-      console.log(`[${ts()}] Forge handshake: auto-detecting mods from server`);
+    try {
+      if (CONFIG.forgeMods) {
+        const mods = CONFIG.forgeMods.split(',').map(s => {
+          const [modid, version] = s.trim().split(':');
+          return { modid, version };
+        });
+        forgeHandshake(bot._client, { forgeMods: mods });
+        console.log(`[${ts()}] Forge handshake: manual mod list (${mods.length} mods)`);
+      } else {
+        autoVersionForge(bot._client);
+        console.log(`[${ts()}] Forge handshake: auto-detecting mods from server`);
+      }
+    } catch (e) {
+      console.log(`[${ts()}] Forge handshake failed: ${e.message}`);
     }
   } else if (CONFIG.forge) {
     console.log(`[${ts()}] Warning: bot._client not available, Forge disabled for this attempt`);
+  }
+
+  /* Watch every packet: update lastPacketTime so the watchdog
+     knows the connection is alive */
+  if (bot._client) {
+    bot._client.on('packet', () => { lastPacketTime = Date.now(); });
+    bot._client.on('end', () => {
+      console.log(`[${ts()}] Client ended`);
+      reconnectCount++;
+      safeReconnect();
+    });
+    bot._client.on('error', (err) => {
+      console.log(`[${ts()}] Client error: ${err && err.message}`);
+      reconnectCount++;
+      safeReconnect();
+    });
   }
 
   bot.once('spawn', () => {
     currentDelay = CONFIG.reconnectDelay;
     console.log(`[${ts()}] Bot is in game`);
     startAntiAfk();
+    startWatchdog();
   });
 
   bot.on('death', () => {
     console.log(`[${ts()}] Bot died, respawning`);
-    bot.respawn();
+    try { bot.respawn(); } catch (e) {}
   });
 
   bot.on('kicked', (reason) => {
     console.log(`[${ts()}] Kicked: ${JSON.stringify(reason)}`);
+    reconnectCount++;
   });
 
   bot.on('error', (err) => {
-    if (isParseError(err)) { logParseError(); return; }
     console.log(`[${ts()}] Error: ${err && err.message}`);
+    reconnectCount++;
     safeReconnect();
   });
 
   bot.on('end', () => {
     console.log(`[${ts()}] Connection ended`);
+    reconnectCount++;
     stopAntiAfk();
+    stopWatchdog();
     scheduleReconnect();
   });
-}
 
-function scheduleReconnect() {
-  if (reconnectTimer) return;
-  const delay = currentDelay;
-  currentDelay = Math.min(currentDelay * 2, CONFIG.maxReconnectDelay);
-  console.log(`[${ts()}] Reconnecting in ${delay / 1000}s`);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connectBot();
-  }, delay);
+  /* Log reconnect rate: if >5 per minute, modpack is too heavy */
+  const now = Date.now();
+  if (now - lastReconnectLog > 60000) {
+    lastReconnectLog = now;
+    if (reconnectCount > 5) {
+      console.log(`[${ts()}] Warning: ${reconnectCount} reconnects in the last minute — modpack is very heavy for mineflayer`);
+    }
+  }
 }
 
 function startAntiAfk() {
@@ -180,16 +223,16 @@ function stopAntiAfk() {
   if (antiAfkTimer) { clearInterval(antiAfkTimer); antiAfkTimer = null; }
 }
 
-/* Crash resilience: parse errors are ignored, everything else
-   triggers a clean reconnect instead of killing the process */
+/* Global crash resilience */
 process.on('uncaughtException', (err) => {
-  if (isParseError(err)) { logParseError(); return; }
-  console.log(`[${ts()}] Uncaught exception: ${err && (err.stack || err.message)}`);
+  console.log(`[${ts()}] Uncaught: ${err && (err.stack || err.message)}`);
+  reconnectCount++;
   safeReconnect();
 });
 
 process.on('unhandledRejection', (err) => {
   console.log(`[${ts()}] Unhandled rejection: ${err && (err.stack || err.message)}`);
+  reconnectCount++;
   safeReconnect();
 });
 
