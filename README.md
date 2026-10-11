@@ -1,13 +1,14 @@
 <div align="center">
 
-# 🤖 aternos-afk-bot
+# 🤖 Aternos-24-7
 
 **Keeps your free Aternos server awake 24/7 — without ever touching the power button.**
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)
-![Cost](https://img.shields.io/badge/cost-%240.00-success.svg)
-![Works on my server](https://img.shields.io/badge/works-on%20my%20server-blueviolet.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Cost](https://img.shields.io/badge/cost-%240.00-success.svg?style=for-the-badge)](#)
+[![Works on my server](https://img.shields.io/badge/works-on%20my%20server-blueviolet.svg?style=for-the-badge)](#)
+[![Minecraft](https://img.shields.io/badge/Minecraft-AFK_bot-62B47A?style=for-the-badge&logo=&logoColor=white)](https://aternos.org)
 
 </div>
 
@@ -36,6 +37,15 @@ Aternos is amazing — a fully free Minecraft server. The catch: the moment the 
 - 🔁 **Self-ping** keeps the free Render instance awake — no UptimeRobot needed
 - ⚙️ **Zero code edits** — everything is configured with environment variables
 - 🪶 **~130 lines** of readable code, no bloat, no build step
+
+## 📁 Repository structure
+
+```
+Aternos-24-7/
+├── index.js       # The whole bot — connect, anti-AFK, respawn, self-ping, status
+├── package.json   # mineflayer + express
+└── LICENSE        # MIT
+```
 
 ## 🚀 Quick start
 
@@ -116,8 +126,8 @@ Hit your Render URL (`https://your-app.onrender.com`) and get:
 ## 🧪 Run locally
 
 ```bash
-git clone https://github.com/you/aternos-afk-bot
-cd aternos-afk-bot
+git clone https://github.com/Abdullayews/Aternos-24-7
+cd Aternos-24-7
 npm install
 SERVER_HOST=something.aternos.me BOT_NAME=MyBot npm start
 ```
@@ -129,3 +139,7 @@ SERVER_HOST=something.aternos.me BOT_NAME=MyBot npm start
 Automating an AFK player goes against Aternos's terms of service, and they actively hunt bots. Worst case: your server or account gets banned. This project is for **educational purposes** — use at your own risk.
 
 If you actually need reliable 24/7 hosting, consider [exaroton](https://exaroton.com) (Aternos's paid sibling, billed per minute) or a cheap VPS.
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).
